@@ -38,6 +38,7 @@ BuildRequires: pkgconfig(libswscale)
 BuildRequires: pkgconfig(gbm)
 BuildRequires: pkgconfig(libva)
 BuildRequires: pkgconfig(libva-drm)
+BuildRequires: pkgconfig(epoxy)
 Requires: %{libname} = %{EVRD}
 
 %description

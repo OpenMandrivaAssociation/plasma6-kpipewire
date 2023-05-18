@@ -39,6 +39,7 @@ BuildRequires: pkgconfig(gbm)
 BuildRequires: pkgconfig(libva)
 BuildRequires: pkgconfig(libva-drm)
 BuildRequires: pkgconfig(epoxy)
+BuildRequires: pkgconfig(libdrm)
 Requires: %{libname} = %{EVRD}
 
 %description

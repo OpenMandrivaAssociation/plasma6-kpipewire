@@ -9,6 +9,11 @@ Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-mast
 Summary: A set of convenient classes to use PipeWire in Qt projects
 URL: https://invent.kde.org/plasma/kpipewire
 License: CC0-1.0 LGPL-2.0+ LGPL-2.1 LGPL-3.0
+# Plasma 5 and 6 both provide a libKPipeWire.so.5,
+# wreaking havoc.
+# Let's bump the soname here unless and until
+# upstream changes the library name.
+Patch0: plasma6-kpipewire-bump-soname.patch
 Group: System/Libraries
 BuildRequires: cmake
 BuildRequires: cmake(ECM)

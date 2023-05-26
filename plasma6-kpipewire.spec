@@ -2,7 +2,7 @@
 %define devname %mklibname KPipeWire -d
 %define git 20230518
 
-Name: kf6-kpipewire
+Name: plasma6-kpipewire
 Version: 5.240.0
 Release: %{?git:0.%{git}.}1
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2

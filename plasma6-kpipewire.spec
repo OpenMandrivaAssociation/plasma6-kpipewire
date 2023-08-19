@@ -1,6 +1,6 @@
 %define libname %mklibname KPipeWire
 %define devname %mklibname KPipeWire -d
-%define git 20230818
+%define git 20230819
 
 Name: plasma6-kpipewire
 Version: 5.240.0

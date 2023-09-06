@@ -1,10 +1,12 @@
-%define libname %mklibname KPipeWire
-%define devname %mklibname KPipeWire -d
+%define uvlibname %mklibname KPipeWire
+%define libname %mklibname KPipeWire-plasma6
+%define uvdevname %mklibname KPipeWire -d
+%define devname %mklibname KPipeWire-plasma6 -d
 %define git 20230901
 
 Name: plasma6-kpipewire
 Version: 5.240.0
-Release: %{?git:0.%{git}.}1
+Release: %{?git:0.%{git}.}2
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2
 Summary: A set of convenient classes to use PipeWire in Qt projects
 URL: https://invent.kde.org/plasma/kpipewire
@@ -54,6 +56,7 @@ A set of convenient classes to use PipeWire in Qt projects
 Summary: A set of convenient classes to use PipeWire in Qt projects
 Group: System/Libraries
 Requires: %{name} = %{EVRD}
+Obsoletes: %{uvlibname} > 5.240.0-0
 
 %description -n %{libname}
 A set of convenient classes to use PipeWire in Qt projects
@@ -62,6 +65,7 @@ A set of convenient classes to use PipeWire in Qt projects
 Summary: Development files for %{name}
 Group: Development/C
 Requires: %{libname} = %{EVRD}
+Obsoletes: %{uvdevname} > 5.240.0-0
 
 %description -n %{devname}
 Development files (Headers etc.) for %{name}.

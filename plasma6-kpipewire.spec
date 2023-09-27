@@ -2,7 +2,7 @@
 %define libname %mklibname KPipeWire-plasma6
 %define uvdevname %mklibname KPipeWire -d
 %define devname %mklibname KPipeWire-plasma6 -d
-%define git 20230924
+%define git 20230927
 
 Name: plasma6-kpipewire
 Version: 5.240.0
@@ -47,6 +47,8 @@ BuildRequires: pkgconfig(libva)
 BuildRequires: pkgconfig(libva-drm)
 BuildRequires: pkgconfig(epoxy)
 BuildRequires: pkgconfig(libdrm)
+BuildRequires: pipewire-utils
+Requires: pipewire-utils
 Requires: %{libname} = %{EVRD}
 
 %description

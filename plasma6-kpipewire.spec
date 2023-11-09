@@ -1,13 +1,19 @@
+%define stable %([ "$(echo %{version} |cut -d. -f2)" -ge 80 -o "$(echo %{version} |cut -d. -f3)" -ge 80 ] && echo -n un; echo -n stable)
+
 %define uvlibname %mklibname KPipeWire
 %define libname %mklibname KPipeWire-plasma6
 %define uvdevname %mklibname KPipeWire -d
 %define devname %mklibname KPipeWire-plasma6 -d
-%define git 20231103
+#define git 20231103
 
 Name: plasma6-kpipewire
-Version: 5.240.0
+Version: 5.27.80
 Release: %{?git:0.%{git}.}1
+%if 0%{?git:1}
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2
+%else
+Source0: http://download.kde.org/%{stable}/plasma/%{version}/kpipewire-%{version}.tar.xz
+%endif
 Summary: A set of convenient classes to use PipeWire in Qt projects
 URL: https://invent.kde.org/plasma/kpipewire
 License: CC0-1.0 LGPL-2.0+ LGPL-2.1 LGPL-3.0

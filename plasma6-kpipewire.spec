@@ -7,8 +7,8 @@
 #define git 20231103
 
 Name: plasma6-kpipewire
-Version: 5.27.80
-Release: %{?git:0.%{git}.}2
+Version: 5.90.0
+Release: %{?git:0.%{git}.}1
 %if 0%{?git:1}
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2
 %else
@@ -36,7 +36,7 @@ BuildRequires: cmake(Qt6ToolsTools)
 BuildRequires: cmake(Qt6)
 BuildRequires: cmake(Qt6Quick)
 BuildRequires: cmake(Qt6QuickTest)
-BuildRequires: cmake(KF6Wayland)
+BuildRequires: cmake(KWayland)
 BuildRequires: cmake(KF6I18n)
 BuildRequires: cmake(KF6CoreAddons)
 BuildRequires: cmake(PlasmaWaylandProtocols)

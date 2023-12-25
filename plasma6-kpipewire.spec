@@ -50,6 +50,7 @@ BuildRequires: pkgconfig(libva-drm)
 BuildRequires: pkgconfig(epoxy)
 BuildRequires: pkgconfig(libdrm)
 BuildRequires: pipewire-utils
+BuildRequires: pipewire
 Requires: pipewire-utils
 Requires: %{libname} = %{EVRD}
 

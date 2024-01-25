@@ -8,7 +8,7 @@
 
 Name: plasma6-kpipewire
 Version: 5.92.0
-Release: %{?git:0.%{git}.}1
+Release: %{?git:0.%{git}.}2
 %if 0%{?git:1}
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2
 %else
@@ -71,6 +71,7 @@ Summary: Development files for %{name}
 Group: Development/C
 Requires: %{libname} = %{EVRD}
 Obsoletes: %{uvdevname} > 5.240.0-0
+Requires: pkgconfig(epoxy)
 
 %description -n %{devname}
 Development files (Headers etc.) for %{name}.

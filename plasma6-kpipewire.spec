@@ -7,12 +7,12 @@
 #define git 20231103
 
 Name: plasma6-kpipewire
-Version: 5.93.0
+Version: 5.93.2
 Release: %{?git:0.%{git}.}1
 %if 0%{?git:1}
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2
 %else
-Source0: http://download.kde.org/%{stable}/plasma/%{version}/kpipewire-%{version}.tar.xz
+Source0: http://download.kde.org/%{stable}/plasma/%(echo %{version}|cut -d. -f1-2).0/kpipewire-%{version}.tar.xz
 %endif
 Summary: A set of convenient classes to use PipeWire in Qt projects
 URL: https://invent.kde.org/plasma/kpipewire

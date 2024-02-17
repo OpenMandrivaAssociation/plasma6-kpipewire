@@ -5,12 +5,14 @@
 %define uvdevname %mklibname KPipeWire -d
 %define devname %mklibname KPipeWire-plasma6 -d
 %define git 20240217
+%define gitbranch Plasma/6.0
+%define gitbranchd %(echo %{gitbranch} |sed -e "s,/,-,g")
 
 Name: plasma6-kpipewire
 Version: 5.94.0
 Release: %{?git:0.%{git}.}1
 %if 0%{?git:1}
-Source0: https://invent.kde.org/plasma/kpipewire/-/archive/master/kpipewire-master.tar.bz2#/kpipewire-%{git}.tar.bz2
+Source0: https://invent.kde.org/plasma/kpipewire/-/archive/%{gitbranch}/kpipewire-%{gitbranchd}.tar.bz2#/kpipewire-%{git}.tar.bz2
 %else
 Source0: http://download.kde.org/%{stable}/plasma/%(echo %{version}|cut -d. -f1-2).0/kpipewire-%{version}.tar.xz
 %endif
@@ -79,7 +81,7 @@ Development files (Headers etc.) for %{name}.
 A set of convenient classes to use PipeWire in Qt projects
 
 %prep
-%autosetup -p1 -n kpipewire-%{?git:master}%{!?git:%{version}}
+%autosetup -p1 -n kpipewire-%{?git:%{gitbranchd}}%{!?git:%{version}}
 %cmake \
 	-DBUILD_QCH:BOOL=ON \
 	-DBUILD_WITH_QT6:BOOL=ON \

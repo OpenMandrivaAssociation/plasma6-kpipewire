@@ -1,0 +1,25 @@
+From cf550e143f7bcc2512acbbbfe2a04699ba4c6d0b Mon Sep 17 00:00:00 2001
+From: David Edmundson <kde@davidedmundson.co.uk>
+Date: Wed, 31 Jan 2024 16:08:47 +0000
+Subject: [PATCH] Drop defined but undeclared property
+
+state has no getter or signal
+---
+ src/pipewirerecord.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/pipewirerecord.h b/src/pipewirerecord.h
+index af565a9..190a8e5 100644
+--- a/src/pipewirerecord.h
++++ b/src/pipewirerecord.h
+@@ -17,7 +17,6 @@ class KPIPEWIRE_EXPORT PipeWireRecord : public PipeWireBaseEncodedStream
+ {
+     Q_OBJECT
+     Q_PROPERTY(QString output READ output WRITE setOutput NOTIFY outputChanged)
+-    Q_PROPERTY(State state READ state NOTIFY stateChanged)
+     Q_PROPERTY(QString extension READ extension NOTIFY encoderChanged)
+ public:
+     PipeWireRecord(QObject *parent = nullptr);
+-- 
+GitLab
+

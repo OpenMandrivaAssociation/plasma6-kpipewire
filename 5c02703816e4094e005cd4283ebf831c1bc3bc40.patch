@@ -1,0 +1,446 @@
+From 5c02703816e4094e005cd4283ebf831c1bc3bc40 Mon Sep 17 00:00:00 2001
+From: Aleix Pol <aleixpol@kde.org>
+Date: Sun, 7 Jan 2024 02:49:38 +0100
+Subject: [PATCH] Grow PipeWireFrameData to replace QImage to store local
+ frames
+
+While it's handy because QImage can be rendered into, it's useful to us
+to be able to pass around the frame data without needing QImage to
+support it.
+This is necessary for KPipeWire to support processing (both rendering
+and recording) frames that aren't RGB textures and the likes, which is
+quite common in cameras.
+Instead of automatically copying the buffer, hand over to QImage the
+function to free the buffer so it can give it away when it's done with.
+---
+ src/encoder.cpp              |  4 +--
+ src/pipewirerecord.cpp       | 14 ++++------
+ src/pipewirerecord_p.h       |  2 +-
+ src/pipewiresourceitem.cpp   | 11 ++++----
+ src/pipewiresourceitem.h     |  3 +-
+ src/pipewiresourcestream.cpp | 54 +++++++++++++++++++++++++-----------
+ src/pipewiresourcestream.h   | 23 +++++++++++++--
+ src/pwhelpers.cpp            | 22 +++++++++++++--
+ src/pwhelpers.h              | 44 +++++++++++++++++++++++++++--
+ tests/HeadlessTest.cpp       |  4 +--
+ 10 files changed, 138 insertions(+), 43 deletions(-)
+
+diff --git a/src/encoder.cpp b/src/encoder.cpp
+index 8864235..32f0121 100644
+--- a/src/encoder.cpp
++++ b/src/encoder.cpp
+@@ -192,8 +192,8 @@ void SoftwareEncoder::filterFrame(const PipeWireFrame &frame)
+             m_produce->m_stream->renegotiateModifierFailed(frame.format, frame.dmabuf->modifier);
+             return;
+         }
+-    } else if (frame.image) {
+-        image = frame.image.value();
++    } else if (frame.dataFrame) {
++        image = frame.dataFrame->toImage();
+     } else {
+         return;
+     }
+diff --git a/src/pipewirerecord.cpp b/src/pipewirerecord.cpp
+index 5ef0feb..d283f51 100644
+--- a/src/pipewirerecord.cpp
++++ b/src/pipewirerecord.cpp
+@@ -142,24 +142,22 @@ bool PipeWireRecordProduce::setupFormat()
+ void PipeWireRecordProduce::processFrame(const PipeWireFrame &frame)
+ {
+     PipeWireProduce::processFrame(frame);
+-    if (frame.cursor && !frame.dmabuf && !frame.image && !m_frameWithoutMetadataCursor.isNull()) {
+-        PipeWireFrame frame;
+-        frame.image = m_frameWithoutMetadataCursor;
+-        m_encoder->filterFrame(frame);
++    if (frame.cursor && !frame.dmabuf && !frame.dataFrame && m_frameWithoutMetadataCursor.dataFrame) {
++        m_encoder->filterFrame(m_frameWithoutMetadataCursor);
+     }
+ }
+ 
+ void PipeWireRecordProduce::aboutToEncode(PipeWireFrame &frame)
+ {
+-    if (!frame.image) {
++    if (!frame.dataFrame) {
+         return;
+     }
+ 
+     if (m_cursor.position && !m_cursor.texture.isNull()) {
+-        auto &image = *frame.image;
++        auto image = frame.dataFrame->toImage();
+         // Do not copy the image if it's already ours
+-        if (m_frameWithoutMetadataCursor.cacheKey() != image.cacheKey()) {
+-            m_frameWithoutMetadataCursor = image.copy();
++        if (m_frameWithoutMetadataCursor.dataFrame->cleanup != frame.dataFrame->cleanup) {
++            m_frameWithoutMetadataCursor.dataFrame = frame.dataFrame->copy();
+         }
+         QPainter p(&image);
+         p.drawImage(*m_cursor.position, m_cursor.texture);
+diff --git a/src/pipewirerecord_p.h b/src/pipewirerecord_p.h
+index 55e4d0d..cf0227a 100644
+--- a/src/pipewirerecord_p.h
++++ b/src/pipewirerecord_p.h
+@@ -28,7 +28,7 @@ public:
+ private:
+     const QString m_output;
+     AVFormatContext *m_avFormatContext = nullptr;
+-    QImage m_frameWithoutMetadataCursor;
++    PipeWireFrame m_frameWithoutMetadataCursor;
+ };
+ 
+ struct PipeWireRecordPrivate {
+diff --git a/src/pipewiresourceitem.cpp b/src/pipewiresourceitem.cpp
+index 8ef914e..cd7560d 100644
+--- a/src/pipewiresourceitem.cpp
++++ b/src/pipewiresourceitem.cpp
+@@ -9,6 +9,7 @@
+ #include "glhelpers.h"
+ #include "logging.h"
+ #include "pipewiresourcestream.h"
++#include "pwhelpers.h"
+ 
+ #include <QGuiApplication>
+ #include <QOpenGLContext>
+@@ -337,8 +338,8 @@ void PipeWireSourceItem::processFrame(const PipeWireFrame &frame)
+ 
+     if (frame.dmabuf) {
+         updateTextureDmaBuf(*frame.dmabuf, frame.format);
+-    } else if (frame.image) {
+-        updateTextureImage(*frame.image);
++    } else if (frame.dataFrame) {
++        updateTextureImage(frame.dataFrame);
+     }
+ 
+     if (window() && window()->isVisible()) {
+@@ -394,16 +395,16 @@ void PipeWireSourceItem::updateTextureDmaBuf(const DmaBufAttributes &attribs, sp
+     };
+ }
+ 
+-void PipeWireSourceItem::updateTextureImage(const QImage &image)
++void PipeWireSourceItem::updateTextureImage(const std::shared_ptr<PipeWireFrameData> &data)
+ {
+     if (!window()) {
+         qCWarning(PIPEWIRE_LOGGING) << "pass";
+         return;
+     }
+ 
+-    d->m_createNextTexture = [this, image] {
++    d->m_createNextTexture = [this, data] {
+         setEnabled(true);
+-        return window()->createTextureFromImage(image, QQuickWindow::TextureIsOpaque);
++        return window()->createTextureFromImage(data->toImage(), QQuickWindow::TextureIsOpaque);
+     };
+ }
+ 
+diff --git a/src/pipewiresourceitem.h b/src/pipewiresourceitem.h
+index 7e0e339..eaba351 100644
+--- a/src/pipewiresourceitem.h
++++ b/src/pipewiresourceitem.h
+@@ -22,6 +22,7 @@
+ struct DmaBufAttributes;
+ class PipeWireSourceStream;
+ struct PipeWireFrame;
++class PipeWireFrameData;
+ class QSGTexture;
+ class QOpenGLTexture;
+ typedef void *EGLImage;
+@@ -97,7 +98,7 @@ private:
+     void itemChange(ItemChange change, const ItemChangeData &data) override;
+     void processFrame(const PipeWireFrame &frame);
+     void updateTextureDmaBuf(const DmaBufAttributes &attribs, spa_video_format format);
+-    void updateTextureImage(const QImage &image);
++    void updateTextureImage(const std::shared_ptr<PipeWireFrameData> &data);
+     void refresh();
+ 
+     QScopedPointer<PipeWireSourceItemPrivate> d;
+diff --git a/src/pipewiresourcestream.cpp b/src/pipewiresourcestream.cpp
+index aa5ed3e..50f0bd7 100644
+--- a/src/pipewiresourcestream.cpp
++++ b/src/pipewiresourcestream.cpp
+@@ -126,6 +126,8 @@ spa_video_format drmFormatToSpaVideoFormat(uint32_t drm_format)
+         return SPA_VIDEO_FORMAT_BGR;
+     case DRM_FORMAT_RGB888:
+         return SPA_VIDEO_FORMAT_RGB;
++    case DRM_FORMAT_YUYV:
++        return SPA_VIDEO_FORMAT_YUY2;
+     case DRM_FORMAT_R8:
+         return SPA_VIDEO_FORMAT_GRAY8;
+     default:
+@@ -261,6 +263,10 @@ buildFormat(spa_pod_builder *builder, spa_video_format format, const QList<uint6
+         auto maxFramerate = SPA_FRACTION(requestedMaxFramerate.numerator, requestedMaxFramerate.denominator);
+         spa_pod_builder_add(builder, SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&defFramerate), 0);
+         spa_pod_builder_add(builder, SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction(&maxFramerate, &minFramerate, &maxFramerate), 0);
++    } else {
++        auto defFramerate = SPA_FRACTION(0, 1);
++        auto maxFramerate = SPA_FRACTION(1200, 1);
++        spa_pod_builder_add(builder, SPA_FORMAT_VIDEO_framerate, SPA_POD_CHOICE_RANGE_Fraction(&defFramerate, &defFramerate, &maxFramerate), 0);
+     }
+ 
+     if (modifiers.size() == 1 && modifiers[0] == DRM_FORMAT_MOD_INVALID) {
+@@ -359,6 +365,21 @@ static void onProcess(void *data)
+     stream->process();
+ }
+ 
++PipeWireFrameData::PipeWireFrameData(spa_video_format format, void *data, QSize size, qint32 stride, PipeWireFrameCleanupFunction *cleanup)
++    : format(format)
++    , data(data)
++    , size(size)
++    , stride(stride)
++    , cleanup(cleanup)
++{
++    cleanup->ref();
++}
++
++PipeWireFrameData::~PipeWireFrameData()
++{
++    PipeWireFrameCleanupFunction::unref(cleanup);
++}
++
+ QSize PipeWireSourceStream::size() const
+ {
+     return QSize(d->videoFormat.size.width, d->videoFormat.size.height);
+@@ -539,7 +560,7 @@ void PipeWireSourceStream::handleFrame(struct pw_buffer *buffer)
+             if (bitmap && bitmap->size.width > 0 && bitmap->size.height > 0) {
+                 const uint8_t *bitmap_data = SPA_MEMBER(bitmap, bitmap->offset, uint8_t);
+                 cursorTexture =
+-                    PWHelpers::SpaBufferToQImage(bitmap_data, bitmap->size.width, bitmap->size.height, bitmap->stride, spa_video_format(bitmap->format));
++                    PWHelpers::SpaBufferToQImage(bitmap_data, bitmap->size.width, bitmap->size.height, bitmap->stride, spa_video_format(bitmap->format), {});
+             }
+             frame.cursor = {{cursor->position.x, cursor->position.y}, {cursor->hotspot.x, cursor->hotspot.y}, cursorTexture};
+         }
+@@ -551,18 +572,21 @@ void PipeWireSourceStream::handleFrame(struct pw_buffer *buffer)
+         if (spaBuffer->datas->chunk->size == 0)
+             return;
+ 
+-        uint8_t *map =
+-            static_cast<uint8_t *>(mmap(nullptr, spaBuffer->datas->maxsize + spaBuffer->datas->mapoffset, PROT_READ, MAP_PRIVATE, spaBuffer->datas->fd, 0));
++        const uint32_t mapEnd = spaBuffer->datas->maxsize + spaBuffer->datas->mapoffset;
++        uint8_t *map = static_cast<uint8_t *>(mmap(nullptr, mapEnd, PROT_READ, MAP_PRIVATE, spaBuffer->datas->fd, 0));
+ 
+         if (map == MAP_FAILED) {
+             qCWarning(PIPEWIRE_LOGGING) << "Failed to mmap the memory: " << strerror(errno);
+             return;
+         }
+-        QImage img =
+-            PWHelpers::SpaBufferToQImage(map, d->videoFormat.size.width, d->videoFormat.size.height, spaBuffer->datas->chunk->stride, d->videoFormat.format);
+-        frame.image = img.copy();
+-
+-        munmap(map, spaBuffer->datas->maxsize + spaBuffer->datas->mapoffset);
++        auto cleanup = [map, mapEnd]() {
++            munmap(map, mapEnd);
++        };
++        frame.dataFrame = std::make_shared<PipeWireFrameData>(d->videoFormat.format,
++                                                              map,
++                                                              QSize(d->videoFormat.size.width, d->videoFormat.size.height),
++                                                              spaBuffer->datas->chunk->stride,
++                                                              new PipeWireFrameCleanupFunction(cleanup));
+     } else if (spaBuffer->datas->type == SPA_DATA_DmaBuf) {
+         DmaBufAttributes attribs;
+         attribs.planes.reserve(spaBuffer->n_datas);
+@@ -583,19 +607,17 @@ void PipeWireSourceStream::handleFrame(struct pw_buffer *buffer)
+         Q_ASSERT(!attribs.planes.isEmpty());
+         frame.dmabuf = attribs;
+     } else if (spaBuffer->datas->type == SPA_DATA_MemPtr) {
+-        frame.image = PWHelpers::SpaBufferToQImage(static_cast<uint8_t *>(spaBuffer->datas->data),
+-                                                   d->videoFormat.size.width,
+-                                                   d->videoFormat.size.height,
+-                                                   spaBuffer->datas->chunk->stride,
+-                                                   d->videoFormat.format);
++        frame.dataFrame = std::make_shared<PipeWireFrameData>(d->videoFormat.format,
++                                                              spaBuffer->datas->data,
++                                                              QSize(d->videoFormat.size.width, d->videoFormat.size.height),
++                                                              spaBuffer->datas->chunk->stride,
++                                                              nullptr);
+     } else {
+         if (spaBuffer->datas->type == SPA_ID_INVALID)
+             qWarning() << "invalid buffer type";
+         else
+             qWarning() << "unsupported buffer type" << spaBuffer->datas->type;
+-        QImage errorImage(200, 200, QImage::Format_ARGB32_Premultiplied);
+-        errorImage.fill(Qt::red);
+-        frame.image = errorImage;
++        frame.dataFrame = {};
+     }
+ 
+     Q_EMIT frameReceived(frame);
+diff --git a/src/pipewiresourcestream.h b/src/pipewiresourcestream.h
+index 8db9943..a89a234 100644
+--- a/src/pipewiresourcestream.h
++++ b/src/pipewiresourcestream.h
+@@ -8,6 +8,7 @@
+ 
+ #pragma once
+ 
++#include <QDebug>
+ #include <QHash>
+ #include <QImage>
+ #include <QObject>
+@@ -25,6 +26,7 @@
+ 
+ #undef Status
+ 
++class PipeWireFrameCleanupFunction;
+ class PipeWireCore;
+ struct gbm_device;
+ 
+@@ -60,14 +62,31 @@ struct PipeWireCursor {
+ };
+ Q_DECLARE_METATYPE(PipeWireCursor);
+ 
++class KPIPEWIRE_EXPORT PipeWireFrameData
++{
++    Q_DISABLE_COPY(PipeWireFrameData)
++public:
++    PipeWireFrameData(spa_video_format format, void *data, QSize size, qint32 stride, PipeWireFrameCleanupFunction *cleanup);
++    ~PipeWireFrameData();
++
++    QImage toImage() const;
++    std::shared_ptr<PipeWireFrameData> copy() const;
++
++    const spa_video_format format;
++    void *const data = nullptr;
++    const QSize size;
++    const qint32 stride = 0;
++    PipeWireFrameCleanupFunction *const cleanup = nullptr;
++};
++
+ struct KPIPEWIRE_EXPORT PipeWireFrame {
+     spa_video_format format;
+     std::optional<quint64> sequential;
+     std::optional<std::chrono::nanoseconds> presentationTimestamp;
+     std::optional<DmaBufAttributes> dmabuf;
+-    std::optional<QImage> image;
+     std::optional<QRegion> damage;
+     std::optional<PipeWireCursor> cursor;
++    std::shared_ptr<PipeWireFrameData> dataFrame;
+ };
+ 
+ struct Fraction {
+@@ -87,8 +106,6 @@ struct Fraction {
+     quint32 denominator = 0;
+ };
+ 
+-KPIPEWIRE_EXPORT QImage::Format SpaToQImageFormat(quint32 /*spa_video_format*/ format);
+-
+ struct PipeWireSourceStreamPrivate;
+ 
+ class KPIPEWIRE_EXPORT PipeWireSourceStream : public QObject
+diff --git a/src/pwhelpers.cpp b/src/pwhelpers.cpp
+index 0b58782..a02896e 100644
+--- a/src/pwhelpers.cpp
++++ b/src/pwhelpers.cpp
+@@ -32,8 +32,9 @@ QImage::Format SpaToQImageFormat(quint32 format)
+     }
+ }
+ 
+-QImage PWHelpers::SpaBufferToQImage(const uchar *data, int width, int height, qsizetype bytesPerLine, spa_video_format format)
++QImage PWHelpers::SpaBufferToQImage(const uchar *data, int width, int height, qsizetype bytesPerLine, spa_video_format format, PipeWireFrameCleanupFunction *c)
+ {
++    c->ref();
+     switch (format) {
+     case SPA_VIDEO_FORMAT_BGRx:
+     case SPA_VIDEO_FORMAT_BGRA:
+@@ -41,13 +42,28 @@ QImage PWHelpers::SpaBufferToQImage(const uchar *data, int width, int height, qs
+     case SPA_VIDEO_FORMAT_ABGR: {
+         // This is needed because QImage does not support BGRA
+         // This is obviously a much slower path, it makes sense to avoid it as much as possible
+-        return QImage(data, width, height, bytesPerLine, SpaToQImageFormat(format)).rgbSwapped();
++        return QImage(data, width, height, bytesPerLine, SpaToQImageFormat(format), &PipeWireFrameCleanupFunction::unref, c).rgbSwapped();
+     }
+     case SPA_VIDEO_FORMAT_GRAY8:
+     case SPA_VIDEO_FORMAT_RGBx:
+     case SPA_VIDEO_FORMAT_RGB:
+     case SPA_VIDEO_FORMAT_RGBA:
+     default:
+-        return QImage(data, width, height, bytesPerLine, SpaToQImageFormat(format));
++        return QImage(data, width, height, bytesPerLine, SpaToQImageFormat(format), &PipeWireFrameCleanupFunction::unref, c);
+     }
+ }
++
++QImage PipeWireFrameData::toImage() const
++{
++    return PWHelpers::SpaBufferToQImage(static_cast<uchar *>(data), size.width(), size.height(), stride, format, cleanup);
++}
++
++std::shared_ptr<PipeWireFrameData> PipeWireFrameData::copy() const
++{
++    const uint bufferSize = size.height() * stride * 4;
++    auto newMap = malloc(bufferSize);
++    memcpy(newMap, data, bufferSize);
++    return std::make_shared<PipeWireFrameData>(format, newMap, size, stride, new PipeWireFrameCleanupFunction([newMap] {
++                                                   free(newMap);
++                                               }));
++}
+diff --git a/src/pwhelpers.h b/src/pwhelpers.h
+index 592f712..50dd889 100644
+--- a/src/pwhelpers.h
++++ b/src/pwhelpers.h
+@@ -13,9 +13,49 @@
+ 
+ typedef unsigned int GLenum;
+ 
+-namespace PWHelpers
++/**
++ * The @class PipeWireFrameCleanupFunction is used to track the lifetime of a pipewire frame.
++ *
++ * It is used to have a ref-counted class that will call the cleanup function when
++ * it's left with no references.
++ * This is useful so that it can be passed to QImage() if necessary without having to
++ * track if the QImage itself outlives the buffer.
++ */
++class PipeWireFrameCleanupFunction
+ {
++    Q_DISABLE_COPY(PipeWireFrameCleanupFunction)
++public:
++    PipeWireFrameCleanupFunction(std::function<void()> cleanup)
++        : m_ref(0)
++        , m_cleanup(cleanup)
++    {
++    }
++
++    void ref()
++    {
++        m_ref++;
++    }
++    static void unref(void *x)
++    {
++        if (!x) {
++            return;
++        }
++        auto self = static_cast<PipeWireFrameCleanupFunction *>(x);
++        self->m_ref--;
++        if (self->m_ref == 0) {
++            self->m_cleanup();
++            delete self;
++        }
++    }
++
++private:
++    QAtomicInt m_ref;
++    std::function<void()> m_cleanup;
++};
+ 
+-KPIPEWIRE_EXPORT QImage SpaBufferToQImage(const uchar *data, int width, int height, qsizetype bytesPerLine, spa_video_format format);
++namespace PWHelpers
++{
+ 
++KPIPEWIRE_EXPORT QImage
++SpaBufferToQImage(const uchar *data, int width, int height, qsizetype bytesPerLine, spa_video_format format, PipeWireFrameCleanupFunction *cleanup);
+ }
+diff --git a/tests/HeadlessTest.cpp b/tests/HeadlessTest.cpp
+index e607be0..33db742 100644
+--- a/tests/HeadlessTest.cpp
++++ b/tests/HeadlessTest.cpp
+@@ -88,8 +88,8 @@ void createStream(int nodeId, std::optional<int> fd = {})
+             } else {
+                 qDebug() << "dmabuf" << frame.format;
+             }
+-        } else if (frame.image) {
+-            qDebug() << "image" << frame.image->format() << frame.format;
++        } else if (frame.dataFrame) {
++            qDebug() << "image" << frame.dataFrame->format << frame.format;
+         } else {
+             qDebug() << "no-frame";
+         }
+-- 
+GitLab
+

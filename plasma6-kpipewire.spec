@@ -56,6 +56,11 @@ BuildRequires: pipewire
 Requires: pipewire-utils
 Requires: %{libname} = %{EVRD}
 
+%patchlist
+https://invent.kde.org/plasma/kpipewire/-/commit/a8a1eef5e07a104df457a92d054d3b860fd5db27.patch
+https://invent.kde.org/plasma/kpipewire/-/commit/d04ee42a4388970d8a95e4f5e2a6677a54aa6df0.patch
+https://invent.kde.org/plasma/kpipewire/-/commit/cf550e143f7bcc2512acbbbfe2a04699ba4c6d0b.patch
+
 %description
 A set of convenient classes to use PipeWire in Qt projects
 

@@ -4,7 +4,7 @@
 %define libname %mklibname KPipeWire-plasma6
 %define uvdevname %mklibname KPipeWire -d
 %define devname %mklibname KPipeWire-plasma6 -d
-%define git 20240222
+#define git 20240222
 %define gitbranch Plasma/6.0
 %define gitbranchd %(echo %{gitbranch} |sed -e "s,/,-,g")
 

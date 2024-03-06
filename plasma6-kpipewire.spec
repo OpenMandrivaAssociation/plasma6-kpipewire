@@ -9,14 +9,13 @@
 %define gitbranchd %(echo %{gitbranch} |sed -e "s,/,-,g")
 
 Name: plasma6-kpipewire
-Version: 6.0.1
+Version: 6.0.1.1
 Release: %{?git:0.%{git}.}1
 %if 0%{?git:1}
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/%{gitbranch}/kpipewire-%{gitbranchd}.tar.bz2#/kpipewire-%{git}.tar.bz2
 %else
-Source0: http://download.kde.org/%{stable}/plasma/%{version}/kpipewire-%{version}.tar.xz
+Source0: http://download.kde.org/%{stable}/plasma/%(echo %{version} |cut -d. -f1-3)/kpipewire-%{version}.tar.xz
 %endif
-Patch0: kpipewire-6.0.1-cmake-syntax.patch
 Summary: A set of convenient classes to use PipeWire in Qt projects
 URL: https://invent.kde.org/plasma/kpipewire
 License: CC0-1.0 LGPL-2.0+ LGPL-2.1 LGPL-3.0

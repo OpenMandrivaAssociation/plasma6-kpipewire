@@ -9,7 +9,7 @@
 %define gitbranchd %(echo %{gitbranch} |sed -e "s,/,-,g")
 
 Name: plasma6-kpipewire
-Version: 6.0.5
+Version: 6.1.0
 Release: %{?git:0.%{git}.}1
 %if 0%{?git:1}
 Source0: https://invent.kde.org/plasma/kpipewire/-/archive/%{gitbranch}/kpipewire-%{gitbranchd}.tar.bz2#/kpipewire-%{git}.tar.bz2
@@ -55,10 +55,11 @@ BuildRequires: pipewire-utils
 BuildRequires: pipewire
 Requires: pipewire-utils
 Requires: %{libname} = %{EVRD}
+BuildSystem: cmake
+BuildOption: -DBUILD_QCH:BOOL=ON
+BuildOption: -DKDE_INSTALL_USE_QT_SYS_PATHS:BOOL=ON
 
 %patchlist
-https://invent.kde.org/plasma/kpipewire/-/commit/a8a1eef5e07a104df457a92d054d3b860fd5db27.patch
-https://invent.kde.org/plasma/kpipewire/-/commit/d04ee42a4388970d8a95e4f5e2a6677a54aa6df0.patch
 
 %description
 A set of convenient classes to use PipeWire in Qt projects
@@ -84,21 +85,7 @@ Development files (Headers etc.) for %{name}.
 
 A set of convenient classes to use PipeWire in Qt projects
 
-%prep
-%autosetup -p1 -n kpipewire-%{?git:%{gitbranchd}}%{!?git:%{version}}
-%cmake \
-	-DBUILD_QCH:BOOL=ON \
-	-DBUILD_WITH_QT6:BOOL=ON \
-	-DKDE_INSTALL_USE_QT_SYS_PATHS:BOOL=ON \
-	-G Ninja
-
-%build
-%ninja_build -C build
-
-%install
-%ninja_install -C build
-
-%find_lang %{name} --all-name --with-qt --with-html
+#find_lang %{name} --all-name --with-qt --with-html
 
 %files -f %{name}.lang
 %{_datadir}/qlogging-categories6/kpipewire.*

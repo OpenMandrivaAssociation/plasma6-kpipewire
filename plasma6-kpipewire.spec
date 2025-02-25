@@ -51,6 +51,7 @@ BuildRequires: pkgconfig(libva)
 BuildRequires: pkgconfig(libva-drm)
 BuildRequires: pkgconfig(epoxy)
 BuildRequires: pkgconfig(libdrm)
+BuildRequires: pkgconfig(xkbcommon)
 BuildRequires: pipewire-utils
 BuildRequires: pipewire
 Requires: pipewire-utils
